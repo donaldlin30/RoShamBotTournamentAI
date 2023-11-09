@@ -7,11 +7,12 @@ public class StrategicBot implements RoShamBot {
     private Map<Action, Integer> opponentMoveCount;
     private Random random;
     private int totalMoves;
-    private final double randomnessFactor = 0.1; // Increase for more randomness
+    private final double randomnessFactor = 0.1;
     private Action[] lastThreeMoves = new Action[3];
     private Map<String, Integer> patternMap = new HashMap<>();
-    private final double[] nashEquilibrium = { 0.2, 0.2, 0.2, 0.2, 0.2 }; // Equal probability for each move
-    private final int patternThreshold = 3; // Threshold to consider a behavior a pattern
+    private final double[] nashEquilibrium = { 0.2, 0.2, 0.2, 0.2, 0.2 };
+    private final int patternThreshold = 3;
+    private boolean isOpponentLimited = false;
 
     public StrategicBot() {
         this.opponentMoveCount = new HashMap<>();
@@ -47,18 +48,49 @@ public class StrategicBot implements RoShamBot {
     public Action getNextMove(Action lastOpponentMove) {
         totalMoves++;
         opponentMoveCount.put(lastOpponentMove, opponentMoveCount.getOrDefault(lastOpponentMove, 0) + 1);
+        updatePatternTracking(lastOpponentMove);
+
+        // New logic to check if the opponent is limited to certain moves
+        checkIfOpponentIsLimited();
 
         Action predictableCounter = getMoveIfOpponentIsPredictable();
         if (predictableCounter != null) {
-            return predictableCounter; // Exploit the opponent's predictability
+            return predictableCounter;
         }
 
         Action likelyAction = detectPattern();
         if (likelyAction != null) {
-            return counterMove(likelyAction); // Exploit detected pattern
+            return counterMove(likelyAction);
+        } else if (isOpponentLimited) {
+            return counterLimitedMoveSet(); // New method for countering limited move sets
         } else {
-            return weightedNashEquilibriumMove(); // Use weighted Nash equilibrium
+            return weightedNashEquilibriumMove();
         }
+    }
+
+    private Action counterLimitedMoveSet() {
+        // Counters the most common moves if the opponent is using a limited move set
+        Action mostCommon = Action.ROCK;
+        int maxCount = -1;
+
+        for (Map.Entry<Action, Integer> entry : opponentMoveCount.entrySet()) {
+            if (entry.getValue() > maxCount) {
+                maxCount = entry.getValue();
+                mostCommon = entry.getKey();
+            }
+        }
+
+        // Return the counter to the most common move
+        return counterMove(mostCommon);
+    }
+
+    private void checkIfOpponentIsLimited() {
+        // Assuming an opponent is limited if they have not used a move after a
+        // significant number of rounds
+        int moveThreshold = totalMoves / 2; // Threshold can be adjusted
+        isOpponentLimited = opponentMoveCount.entrySet().stream()
+                .filter(entry -> entry.getValue() <= moveThreshold)
+                .count() > 3; // If more than 3 moves are underrepresented, consider opponent limited
     }
 
     private Action weightedNashEquilibriumMove() {
