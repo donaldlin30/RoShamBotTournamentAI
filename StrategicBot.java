@@ -7,10 +7,12 @@ public class StrategicBot implements RoShamBot {
     private Map<Action, Integer> opponentMoveCount;
     private Random random;
     private int totalMoves;
+    private final double randomnessFactor = 0.1; // Increase for more randomness
+    private Action[] lastThreeMoves = new Action[3];
+    private Map<String, Integer> patternMap = new HashMap<>();
     private final double[] nashEquilibrium = { 0.2, 0.2, 0.2, 0.2, 0.2 }; // Equal probability for each move
     private final int patternThreshold = 3; // Threshold to consider a behavior a pattern
 
-    /** Constructor initializes the move counters and random number generator. */
     public StrategicBot() {
         this.opponentMoveCount = new HashMap<>();
         for (Action action : Action.values()) {
@@ -20,50 +22,103 @@ public class StrategicBot implements RoShamBot {
         this.totalMoves = 0;
     }
 
-    /**
-     * Returns the next action that this bot will take.
-     * 
-     * @param lastOpponentMove the action that was played by the opponent on the
-     *                         last round.
-     * @return the next action to play.
-     */
+    private void updatePatternTracking(Action lastOpponentMove) {
+        if (totalMoves >= 3) {
+            String pattern = "" + lastThreeMoves[0] + lastThreeMoves[1] + lastThreeMoves[2];
+            patternMap.put(pattern, patternMap.getOrDefault(pattern, 0) + 1);
+        }
+
+        // Update the last moves array
+        lastThreeMoves[0] = lastThreeMoves[1];
+        lastThreeMoves[1] = lastThreeMoves[2];
+        lastThreeMoves[2] = lastOpponentMove;
+    }
+
+    private Action getMoveIfOpponentIsPredictable() {
+        // Check if the opponent has played the same move every time
+        for (Map.Entry<Action, Integer> entry : opponentMoveCount.entrySet()) {
+            if (entry.getValue() == totalMoves) {
+                return counterMove(entry.getKey()); // Always counter the repeated move
+            }
+        }
+        return null; // Opponent is not predictable
+    }
+
     public Action getNextMove(Action lastOpponentMove) {
         totalMoves++;
         opponentMoveCount.put(lastOpponentMove, opponentMoveCount.getOrDefault(lastOpponentMove, 0) + 1);
 
-        // Check for patterns in opponent's moves
+        Action predictableCounter = getMoveIfOpponentIsPredictable();
+        if (predictableCounter != null) {
+            return predictableCounter; // Exploit the opponent's predictability
+        }
+
         Action likelyAction = detectPattern();
         if (likelyAction != null) {
-            // Exploit the detected pattern
-            return counterMove(likelyAction);
+            return counterMove(likelyAction); // Exploit detected pattern
         } else {
-            // No pattern detected, use Nash equilibrium
-            return nashEquilibriumMove();
+            return weightedNashEquilibriumMove(); // Use weighted Nash equilibrium
         }
     }
 
-    /**
-     * Detects if there is a pattern in the opponent's moves.
-     * 
-     * @return the action that the opponent is most likely to take next if a pattern
-     *         is detected, otherwise null.
-     */
-    private Action detectPattern() {
-        for (Map.Entry<Action, Integer> entry : opponentMoveCount.entrySet()) {
-            if (entry.getValue() > (totalMoves / nashEquilibrium.length) + patternThreshold) {
-                return entry.getKey();
+    private Action weightedNashEquilibriumMove() {
+        double[] weightedChances = new double[Action.values().length];
+        int totalOpponentMoves = opponentMoveCount.values().stream().mapToInt(Integer::intValue).sum();
+
+        // Adjust weights based on opponent move frequency
+        for (int i = 0; i < weightedChances.length; i++) {
+            Action action = Action.values()[i];
+            weightedChances[i] = nashEquilibrium[i] +
+                    randomnessFactor * (opponentMoveCount.getOrDefault(action, 0) / (double) totalOpponentMoves);
+        }
+
+        // Normalize the weights
+        double sum = 0;
+        for (double weight : weightedChances) {
+            sum += weight;
+        }
+        for (int i = 0; i < weightedChances.length; i++) {
+            weightedChances[i] /= sum;
+        }
+
+        // Select a move based on the weighted chances
+        double p = random.nextDouble();
+        double cumulativeProbability = 0.0;
+        for (int i = 0; i < weightedChances.length; i++) {
+            cumulativeProbability += weightedChances[i];
+            if (p <= cumulativeProbability) {
+                return Action.values()[i];
             }
         }
+
+        return Action.ROCK; // Fallback if something goes wrong
+    }
+
+    private Action detectPattern() {
+        if (totalMoves < 3) {
+            return null;
+        }
+
+        String recentPattern = "" + lastThreeMoves[1] + lastThreeMoves[2];
+        Action mostLikelyMove = null;
+        int maxCount = -1;
+
+        for (Action action : Action.values()) {
+            String potentialPattern = recentPattern + action;
+            int count = patternMap.getOrDefault(potentialPattern, 0);
+            if (count > maxCount) {
+                maxCount = count;
+                mostLikelyMove = action;
+            }
+        }
+
+        if (maxCount > patternThreshold) {
+            return mostLikelyMove;
+        }
+
         return null;
     }
 
-    /**
-     * Returns a move that counters the opponent's most likely next move.
-     * 
-     * @param action the action that the opponent is most likely to take next.
-     * @return the action to play that counters the opponent's most likely next
-     *         move.
-     */
     private Action counterMove(Action action) {
         switch (action) {
             case ROCK:
@@ -77,15 +132,10 @@ public class StrategicBot implements RoShamBot {
             case SPOCK:
                 return Action.LIZARD; // Lizard poisons Spock
             default:
-                return Action.ROCK; // Default case, should not be reached
+                return Action.ROCK;
         }
     }
 
-    /**
-     * Returns a move based on the Nash equilibrium strategy.
-     * 
-     * @return the action to play based on Nash equilibrium.
-     */
     private Action nashEquilibriumMove() {
         double p = random.nextDouble();
         double cumulativeProbability = 0.0;
