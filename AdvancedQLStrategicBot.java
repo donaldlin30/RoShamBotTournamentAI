@@ -22,7 +22,7 @@ public class AdvancedQLStrategicBot implements RoShamBot {
     private boolean isOpponentLimited = false;
     private int totalMoves;
 
-    public AdvancedRLStrategicBot() {
+    public AdvancedQLStrategicBot() {
         this.learningRate = 0.9;
         this.discountFactor = 0.95;
         this.explorationRate = 1.0;
