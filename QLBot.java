@@ -16,7 +16,7 @@ public class QLBot implements RoShamBot {
         this.explorationDecayRate = 0.995;
         this.qTable = new HashMap<>();
         this.random = new Random();
-        this.lastMove = Action.ROCK; // Start with any move
+        this.lastMove = Action.ROCK; 
     }
 
     @Override
