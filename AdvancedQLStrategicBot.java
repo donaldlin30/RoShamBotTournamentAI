@@ -1,8 +1,11 @@
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Random;
-
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Deque;
 import java.util.List;
 
 public class AdvancedQLStrategicBot implements RoShamBot {
@@ -21,6 +24,11 @@ public class AdvancedQLStrategicBot implements RoShamBot {
     private final int patternThreshold = 3;
     private boolean isOpponentLimited = false;
     private int totalMoves;
+    private int gamesWon = 0;
+    private int totalGames = 0;
+    private Deque<Action> lastFiveBotMoves;
+    private Deque<Action> lastFiveOpponentMoves;
+    private List<Action> prevState;
 
     public AdvancedQLStrategicBot() {
         this.learningRate = 0.9;
@@ -35,34 +43,68 @@ public class AdvancedQLStrategicBot implements RoShamBot {
             this.opponentMoveCount.put(action, 0);
         }
         this.totalMoves = 0;
+        this.lastFiveBotMoves = new LinkedList<>(Collections.nCopies(5, Action.ROCK));
+        this.lastFiveOpponentMoves = new LinkedList<>(Collections.nCopies(5, Action.ROCK));
+        this.prevState = null;
     }
 
-    @Override
     public Action getNextMove(Action lastOpponentMove) {
+        updateLastFiveMoves(lastMove, lastOpponentMove);
+
+        List<Action> currentState = new ArrayList<>(lastFiveBotMoves);
+        currentState.addAll(lastFiveOpponentMoves);
+        if (prevState != null) {
+            // Update the Q-table based on the previous state, action, and the reward received from the move
+            int reward = getReward(lastMove, lastOpponentMove);
+            updateQTable(prevState, lastMove, reward, currentState);
+        }
+
+        totalGames++;
         totalMoves++;
         updateOpponentMoveCount(lastOpponentMove);
         updatePatternTracking(lastOpponentMove);
 
-        // Define the current state
-        List<Action> state = Arrays.asList(lastMove, lastOpponentMove);
+
+        // Calculate win rate
+        double winRate = (double) gamesWon / totalGames;
+
+        // Check win rate and apply Nash equilibrium directly if conditions are met
+        if (totalGames > 1000 && winRate < 0.5) {
+            return weightedNashEquilibriumMove();
+        }
+
 
         // Use Strategic Pattern Detection
         Action strategyAction = getStrategicAction();
 
         // Use Q-Learning for move selection if no pattern is detected
-        Action action = strategyAction != null ? strategyAction : selectActionUsingQLearning(state);
+        Action action = strategyAction != null ? strategyAction : selectActionUsingQLearning(currentState);
 
-        // Assume a training scenario for Q-learning update
-        Action nextOpponentMove = Action.values()[random.nextInt(Action.values().length)];
-        updateQTable(state, action, getReward(action, nextOpponentMove), Arrays.asList(action, nextOpponentMove));
+        prevState = new ArrayList<>(currentState);
+        // Update the last move
+        lastMove = action;
 
         // Decay the exploration rate
         explorationRate *= explorationDecayRate;
 
-        // Update the last move
-        lastMove = action;
+        
+
+        // Update games won
+        int reward = getReward(lastMove, lastOpponentMove);
+        if (reward > 0) {
+            gamesWon++;
+        }
 
         return action;
+    }
+
+    private void updateLastFiveMoves(Action botMove, Action opponentMove) {
+        if (lastFiveBotMoves.size() >= 5) {
+            lastFiveBotMoves.removeFirst();
+            lastFiveOpponentMoves.removeFirst();
+        }
+        lastFiveBotMoves.addLast(botMove);
+        lastFiveOpponentMoves.addLast(opponentMove);
     }
 
     private Action counterLimitedMoveSet() {
@@ -90,10 +132,18 @@ public class AdvancedQLStrategicBot implements RoShamBot {
         if (likelyAction != null) {
             return counterMove(likelyAction);
         } else if (isOpponentLimited) {
+            // System.out.println("Using Counter Limited Move Set Strategy");
             return counterLimitedMoveSet();
         }
 
+        // Introduce a chance to skip Nash equilibrium strategy
+        if (random.nextDouble() < 0.4) { // 50% chance to skip use QL
+            // System.out.println("Skipping Nash Equilibrium Strategy");
+            return null; // This allows the bot to use Q-Learning
+        }
+
         // Otherwise, use Nash equilibrium move
+        // System.out.println("Using Nash Equilibrium Strategy");
         return weightedNashEquilibriumMove();
     }
 
@@ -190,9 +240,13 @@ public class AdvancedQLStrategicBot implements RoShamBot {
 
         // Exploration vs exploitation decision
         if (random.nextDouble() < explorationRate) {
-            return Action.values()[random.nextInt(Action.values().length)];
+            // Random selection for exploration
+            Action randomAction = Action.values()[random.nextInt(Action.values().length)];
+            // System.out.println("QL Strategy (Exploration): Chosen Action = " +
+            // randomAction);
+            return randomAction;
         } else {
-            // Choose the action with the highest Q-value
+            // Choose the action with the highest Q-value for exploitation
             double[] qValues = qTable.get(state);
             int bestActionIndex = 0;
             for (int i = 1; i < qValues.length; i++) {
@@ -200,7 +254,10 @@ public class AdvancedQLStrategicBot implements RoShamBot {
                     bestActionIndex = i;
                 }
             }
-            return Action.values()[bestActionIndex];
+            Action chosenAction = Action.values()[bestActionIndex];
+            // System.out.println("QL Strategy (Exploitation): Chosen Action = " +
+            // chosenAction);
+            return chosenAction;
         }
     }
 

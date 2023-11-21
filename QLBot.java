@@ -1,6 +1,7 @@
 import java.util.*;
 
 public class QLBot implements RoShamBot {
+
     private final double learningRate;
     private final double discountFactor;
     private double explorationRate;
@@ -8,7 +9,11 @@ public class QLBot implements RoShamBot {
     private final Map<List<Action>, double[]> qTable;
     private final Random random;
     private Action lastMove;
-    
+    private Deque<Action> lastFiveMoves; // Last five moves of the bot
+    private Deque<Action> lastFiveOpponentMoves; // Last five moves of the opponent
+    private List<Action> prevState; // Stores the previous state
+    private Action prevAction; // Stores the previous action taken
+
     public QLBot() {
         this.learningRate = 0.9;
         this.discountFactor = 0.95;
@@ -16,26 +21,37 @@ public class QLBot implements RoShamBot {
         this.explorationDecayRate = 0.995;
         this.qTable = new HashMap<>();
         this.random = new Random();
-        this.lastMove = Action.ROCK; 
+        this.lastMove = Action.ROCK;
+        this.lastFiveMoves = new LinkedList<>(Collections.nCopies(5, Action.ROCK));
+        this.lastFiveOpponentMoves = new LinkedList<>(Collections.nCopies(5, Action.ROCK));
+        this.prevState = null;
+        this.prevAction = null;
     }
 
     @Override
     public Action getNextMove(Action lastOpponentMove) {
-        // Define the current state as the last move of the bot and the last move of the opponent
-        List<Action> state = Arrays.asList(lastMove, lastOpponentMove);
+        // Update the last five moves for the bot and the opponent
+        updateLastFiveMoves(lastMove, lastOpponentMove);
+
+        // Define the current state as the combination of last five moves from both the bot and the opponent
+        List<Action> currentState = new ArrayList<>(lastFiveMoves);
+        currentState.addAll(lastFiveOpponentMoves);
+
+        if (prevState != null) {
+            // Update the Q-table based on the previous state, action, and the reward received from the move
+            int reward = getReward(prevAction, lastOpponentMove);
+            updateQTable(prevState, prevAction, reward, currentState);
+        }
 
         // Select an action based on the Q-table or exploration
-        Action action = selectAction(state);
-
-        // Assume this is a training scenario where we simulate the opponent's move
-        // In a real game, the opponent's move would be determined by the game
-        Action nextOpponentMove = Action.values()[random.nextInt(Action.values().length)];
-
-        // Update the Q-table based on the reward received from the move
-        updateQTable(state, action, getReward(action, nextOpponentMove), Arrays.asList(action, nextOpponentMove));
+        Action action = selectAction(currentState);
 
         // Decay the exploration rate
         explorationRate *= explorationDecayRate;
+
+        // Store the current state and action for the next round
+        prevState = new ArrayList<>(currentState);
+        prevAction = action;
 
         // Update the last move
         lastMove = action;
@@ -43,15 +59,21 @@ public class QLBot implements RoShamBot {
         return action;
     }
 
+    private void updateLastFiveMoves(Action botMove, Action opponentMove) {
+        if (lastFiveMoves.size() >= 5) {
+            lastFiveMoves.removeFirst();
+            lastFiveOpponentMoves.removeFirst();
+        }
+        lastFiveMoves.addLast(botMove);
+        lastFiveOpponentMoves.addLast(opponentMove);
+    }
+
     private Action selectAction(List<Action> state) {
-        // Initialize Q-values for the state if it's new
         qTable.putIfAbsent(state, new double[Action.values().length]);
 
-        // Exploration vs exploitation decision
         if (random.nextDouble() < explorationRate) {
             return Action.values()[random.nextInt(Action.values().length)];
         } else {
-            // Choose the action with the highest Q-value
             double[] qValues = qTable.get(state);
             int bestActionIndex = 0;
             for (int i = 1; i < qValues.length; i++) {
@@ -64,20 +86,16 @@ public class QLBot implements RoShamBot {
     }
 
     private void updateQTable(List<Action> state, Action action, int reward, List<Action> nextState) {
-        // Initialize Q-values for the next state if it's new
         qTable.putIfAbsent(nextState, new double[Action.values().length]);
 
-        // Get current Q-value
         double[] currentQValues = qTable.get(state);
         double[] nextQValues = qTable.get(nextState);
 
-        // Q-learning formula
         int actionIndex = action.ordinal();
         double oldQValue = currentQValues[actionIndex];
         double nextMaxQ = Arrays.stream(nextQValues).max().orElse(Double.NEGATIVE_INFINITY);
         currentQValues[actionIndex] = oldQValue + learningRate * (reward + discountFactor * nextMaxQ - oldQValue);
     }
-
     private int getReward(Action action, Action opponentAction) {
         // Winning cases for RPSLS
         if ((action == Action.ROCK && (opponentAction == Action.SCISSORS || opponentAction == Action.LIZARD)) ||
