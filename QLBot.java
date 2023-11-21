@@ -9,33 +9,40 @@ public class QLBot implements RoShamBot {
     private final Map<List<Action>, double[]> qTable;
     private final Random random;
     private Action lastMove;
-    private Deque<Action> lastFiveMoves; // Last five moves of the bot
-    private Deque<Action> lastFiveOpponentMoves; // Last five moves of the opponent
+    private Deque<Action> lastFewMoves; // Last five moves of the bot
+    private Deque<Action> lastFewOpponentMoves; // Last five moves of the opponent
     private List<Action> prevState; // Stores the previous state
     private Action prevAction; // Stores the previous action taken
+    private int history;
+    private int roundLost;
+    private int totalRound;
 
     public QLBot() {
-        this.learningRate = 0.9;
-        this.discountFactor = 0.95;
+        this.learningRate = 0.88;
+        this.discountFactor = 0.88;
         this.explorationRate = 1.0;
-        this.explorationDecayRate = 0.995;
+        this.explorationDecayRate = 0.95;
+        this.history = 3;
         this.qTable = new HashMap<>();
         this.random = new Random();
         this.lastMove = Action.ROCK;
-        this.lastFiveMoves = new LinkedList<>(Collections.nCopies(5, Action.ROCK));
-        this.lastFiveOpponentMoves = new LinkedList<>(Collections.nCopies(5, Action.ROCK));
+        this.lastFewMoves = new LinkedList<>(Collections.nCopies(history, Action.ROCK));
+        this.lastFewOpponentMoves = new LinkedList<>(Collections.nCopies(history, Action.ROCK));
         this.prevState = null;
         this.prevAction = null;
+        this.roundLost = 0;
+        this.totalRound = 0;
     }
 
     @Override
     public Action getNextMove(Action lastOpponentMove) {
+        totalRound++;
         // Update the last five moves for the bot and the opponent
         updateLastFiveMoves(lastMove, lastOpponentMove);
 
         // Define the current state as the combination of last five moves from both the bot and the opponent
-        List<Action> currentState = new ArrayList<>(lastFiveMoves);
-        currentState.addAll(lastFiveOpponentMoves);
+        List<Action> currentState = new ArrayList<>(lastFewMoves);
+        currentState.addAll(lastFewOpponentMoves);
 
         if (prevState != null) {
             // Update the Q-table based on the previous state, action, and the reward received from the move
@@ -53,19 +60,37 @@ public class QLBot implements RoShamBot {
         prevState = new ArrayList<>(currentState);
         prevAction = action;
 
+        //if (totalRound >=2000 && roundLost / totalRound >= 0.55){
+          //  action = playRandom();
+        //}
         // Update the last move
         lastMove = action;
-
         return action;
     }
 
+    private Action playRandom() {
+        double coinFlip = Math.random();
+        Action nextMove;
+        if (coinFlip <= 1.0/5.0)
+            nextMove = Action.ROCK;
+        else if (coinFlip <= 2.0/5.0)
+            nextMove = Action.PAPER;
+        else if (coinFlip <= 3.0/5.0)
+            nextMove = Action.SCISSORS;
+        else if (coinFlip <= 4.0/5.0)
+            nextMove = Action.LIZARD;
+        else
+            nextMove = Action.SPOCK;
+        return nextMove;
+    }
+
     private void updateLastFiveMoves(Action botMove, Action opponentMove) {
-        if (lastFiveMoves.size() >= 5) {
-            lastFiveMoves.removeFirst();
-            lastFiveOpponentMoves.removeFirst();
+        if (lastFewMoves.size() >= this.history) {
+            lastFewMoves.removeFirst();
+            lastFewOpponentMoves.removeFirst();
         }
-        lastFiveMoves.addLast(botMove);
-        lastFiveOpponentMoves.addLast(opponentMove);
+        lastFewMoves.addLast(botMove);
+        lastFewOpponentMoves.addLast(opponentMove);
     }
 
     private Action selectAction(List<Action> state) {
@@ -107,6 +132,7 @@ public class QLBot implements RoShamBot {
         } else if (action == opponentAction) {
             return 0; // Tie
         } else {
+            this.roundLost++;
             return -1; // Lose
         }
     }
