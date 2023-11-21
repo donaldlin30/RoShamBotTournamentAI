@@ -14,15 +14,14 @@ public class QLBot implements RoShamBot {
     private List<Action> prevState; // Stores the previous state
     private Action prevAction; // Stores the previous action taken
     private int history;
-    private int roundLost;
-    private int totalRound;
+
 
     public QLBot() {
-        this.learningRate = 0.88;
-        this.discountFactor = 0.88;
-        this.explorationRate = 1.0;
-        this.explorationDecayRate = 0.95;
-        this.history = 3;
+        this.learningRate = 0.9;
+        this.discountFactor = 0.5;
+        this.explorationRate = 2.5;
+        this.explorationDecayRate = 0.995;
+        this.history =3;
         this.qTable = new HashMap<>();
         this.random = new Random();
         this.lastMove = Action.ROCK;
@@ -30,13 +29,11 @@ public class QLBot implements RoShamBot {
         this.lastFewOpponentMoves = new LinkedList<>(Collections.nCopies(history, Action.ROCK));
         this.prevState = null;
         this.prevAction = null;
-        this.roundLost = 0;
-        this.totalRound = 0;
     }
 
     @Override
     public Action getNextMove(Action lastOpponentMove) {
-        totalRound++;
+
         // Update the last five moves for the bot and the opponent
         updateLastFiveMoves(lastMove, lastOpponentMove);
 
@@ -60,35 +57,15 @@ public class QLBot implements RoShamBot {
         prevState = new ArrayList<>(currentState);
         prevAction = action;
 
-        //if (totalRound >=2000 && roundLost / totalRound >= 0.55){
-          //  action = playRandom();
-        //}
+
         // Update the last move
         lastMove = action;
         return action;
     }
 
-    private Action playRandom() {
-        double coinFlip = Math.random();
-        Action nextMove;
-        if (coinFlip <= 1.0/5.0)
-            nextMove = Action.ROCK;
-        else if (coinFlip <= 2.0/5.0)
-            nextMove = Action.PAPER;
-        else if (coinFlip <= 3.0/5.0)
-            nextMove = Action.SCISSORS;
-        else if (coinFlip <= 4.0/5.0)
-            nextMove = Action.LIZARD;
-        else
-            nextMove = Action.SPOCK;
-        return nextMove;
-    }
-
     private void updateLastFiveMoves(Action botMove, Action opponentMove) {
-        if (lastFewMoves.size() >= this.history) {
-            lastFewMoves.removeFirst();
-            lastFewOpponentMoves.removeFirst();
-        }
+        lastFewMoves.removeFirst();
+        lastFewOpponentMoves.removeFirst();
         lastFewMoves.addLast(botMove);
         lastFewOpponentMoves.addLast(opponentMove);
     }
@@ -132,7 +109,6 @@ public class QLBot implements RoShamBot {
         } else if (action == opponentAction) {
             return 0; // Tie
         } else {
-            this.roundLost++;
             return -1; // Lose
         }
     }
