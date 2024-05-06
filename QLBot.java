@@ -3,6 +3,7 @@ import java.util.*;
 public class QLBot implements RoShamBot {
 
     private final double learningRate;
+
     private final double discountFactor;
     private double explorationRate;
     private final double explorationDecayRate;
@@ -15,13 +16,12 @@ public class QLBot implements RoShamBot {
     private Action prevAction; // Stores the previous action taken
     private int history;
 
-
     public QLBot() {
         this.learningRate = 0.9;
         this.discountFactor = 0.5;
         this.explorationRate = 2.5;
         this.explorationDecayRate = 0.995;
-        this.history =3;
+        this.history = 3;
         this.qTable = new HashMap<>();
         this.random = new Random();
         this.lastMove = Action.ROCK;
@@ -37,12 +37,14 @@ public class QLBot implements RoShamBot {
         // Update the last five moves for the bot and the opponent
         updateLastFiveMoves(lastMove, lastOpponentMove);
 
-        // Define the current state as the combination of last five moves from both the bot and the opponent
+        // Define the current state as the combination of last five moves from both the
+        // bot and the opponent
         List<Action> currentState = new ArrayList<>(lastFewMoves);
         currentState.addAll(lastFewOpponentMoves);
 
         if (prevState != null) {
-            // Update the Q-table based on the previous state, action, and the reward received from the move
+            // Update the Q-table based on the previous state, action, and the reward
+            // received from the move
             int reward = getReward(prevAction, lastOpponentMove);
             updateQTable(prevState, prevAction, reward, currentState);
         }
@@ -56,7 +58,6 @@ public class QLBot implements RoShamBot {
         // Store the current state and action for the next round
         prevState = new ArrayList<>(currentState);
         prevAction = action;
-
 
         // Update the last move
         lastMove = action;
@@ -98,13 +99,14 @@ public class QLBot implements RoShamBot {
         double nextMaxQ = Arrays.stream(nextQValues).max().orElse(Double.NEGATIVE_INFINITY);
         currentQValues[actionIndex] = oldQValue + learningRate * (reward + discountFactor * nextMaxQ - oldQValue);
     }
+
     private int getReward(Action action, Action opponentAction) {
         // Winning cases for RPSLS
         if ((action == Action.ROCK && (opponentAction == Action.SCISSORS || opponentAction == Action.LIZARD)) ||
-            (action == Action.PAPER && (opponentAction == Action.ROCK || opponentAction == Action.SPOCK)) ||
-            (action == Action.SCISSORS && (opponentAction == Action.PAPER || opponentAction == Action.LIZARD)) ||
-            (action == Action.LIZARD && (opponentAction == Action.SPOCK || opponentAction == Action.PAPER)) ||
-            (action == Action.SPOCK && (opponentAction == Action.SCISSORS || opponentAction == Action.ROCK))) {
+                (action == Action.PAPER && (opponentAction == Action.ROCK || opponentAction == Action.SPOCK)) ||
+                (action == Action.SCISSORS && (opponentAction == Action.PAPER || opponentAction == Action.LIZARD)) ||
+                (action == Action.LIZARD && (opponentAction == Action.SPOCK || opponentAction == Action.PAPER)) ||
+                (action == Action.SPOCK && (opponentAction == Action.SCISSORS || opponentAction == Action.ROCK))) {
             return 1; // Win
         } else if (action == opponentAction) {
             return 0; // Tie
